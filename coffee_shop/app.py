@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import mysql.connector
-
+from flask import jsonify
 app = Flask(__name__, static_url_path='/static')
+from decimal import Decimal
 
 app.secret_key = 'your_secret_key'
 
@@ -66,6 +67,21 @@ def owner_dashboard():
     user_points = cursor.fetchall()
     
     return render_template('owner_dashboard.html', coffees=coffees, orders=orders, user_points=user_points)
+# @app.route('/add_coffee', methods=['POST'])
+# def add_coffee():
+#     if 'user_id' not in session:
+#         return redirect(url_for('login'))
+    
+#     name = request.form['name']
+#     price = float(request.form['price'])
+#     quantity = int(request.form['quantity'])
+    
+#     cursor = db.cursor(dictionary=True)
+#     cursor.execute("INSERT INTO coffees (name, price, quantity) VALUES (%s, %s, %s)", (name, price, quantity))
+#     db.commit()
+#     cursor.close()
+    
+#     return redirect(url_for('owner_dashboard'))
 
 @app.route('/update_quantity/<int:coffee_id>', methods=['POST'])
 def update_quantity(coffee_id):
@@ -80,6 +96,44 @@ def update_quantity(coffee_id):
     cursor.close()
     
     return redirect(url_for('owner_dashboard'))
+
+@app.route('/update_price/<int:coffee_id>', methods=['POST'])
+def update_price(coffee_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    new_price = float(request.form['price'])
+    
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("UPDATE coffees SET price = %s WHERE id = %s", (new_price, coffee_id))
+    db.commit()
+    cursor.close()
+    
+    return redirect(url_for('owner_dashboard'))
+
+@app.route('/search_records', methods=['POST'])
+def search_records():
+    search_id = request.form['search_id']
+    cursor = db.cursor(dictionary=True)
+    
+    # Search for user points
+    cursor.execute("SELECT * FROM points WHERE user_id = %s", (search_id,))
+    user_points = cursor.fetchall()
+    
+    # Search for orders
+    cursor.execute("SELECT * FROM orders WHERE user_id = %s", (search_id,))
+    orders = cursor.fetchall()
+    
+    return render_template('owner_dashboard.html', user_points=user_points, orders=orders)
+# @app.route('/query_record', methods=['POST'])
+# def query_record():
+#     record_id = request.json.get('id')
+#     # 根据 record_id 查询相应的记录
+#     record = query_record_from_database(record_id)
+#     if record:
+#         return jsonify({'success': True, 'data': record})
+#     else:
+#         return jsonify({'success': False})
 
 @app.route('/add_coffee', methods=['POST'])
 def add_coffee():
@@ -109,6 +163,59 @@ def delete_coffee(coffee_id):
     
     return redirect(url_for('owner_dashboard'))
 
+# @app.route('/customer_dashboard', methods=['GET', 'POST'])
+# def customer_dashboard():
+#     if 'user_id' not in session:
+#         return redirect(url_for('login'))
+    
+#     if request.method == 'POST':
+#         coffee_id = int(request.form['coffee_id'])
+#         quantity = int(request.form['quantity'])
+#         temperature = request.form['temperature']
+        
+#         cursor = db.cursor(dictionary=True)
+#         cursor.execute("SELECT * FROM coffees WHERE id = %s", (coffee_id,))
+#         coffee = cursor.fetchone()
+        
+#         if coffee and coffee['quantity'] >= quantity:
+#             total_price = coffee['price'] * quantity
+#             cursor.execute("INSERT INTO orders (user_id, coffee_id, quantity, total_price, order_date, temperature) VALUES (%s, %s, %s, %s, NOW(), %s)", (session['user_id'], coffee_id, quantity, total_price, temperature))
+#             db.commit()
+#             cursor.execute("UPDATE coffees SET quantity = quantity - %s WHERE id = %s", (quantity, coffee_id))
+#             db.commit()
+            
+#             # Update points with the total_price of the order
+#             cursor.execute("UPDATE points SET points = points + %s WHERE user_id = %s", (total_price, session['user_id']))
+#             db.commit()
+            
+#             order_success = True
+#         else:
+#             order_success = False
+        
+#         cursor.execute("SELECT * FROM points WHERE user_id = %s", (session['user_id'],))
+#         points = cursor.fetchone()
+        
+#         cursor.execute("SELECT * FROM coffees")
+#         coffees = cursor.fetchall()
+
+#         # Fetch orders for the current user
+#         cursor.execute("SELECT * FROM orders WHERE user_id = %s", (session['user_id'],))
+#         orders = cursor.fetchall()
+        
+#         return render_template('customer_dashboard.html', points=points, coffees=coffees, orders=orders, order_success=order_success)
+    
+#     cursor = db.cursor(dictionary=True)
+#     cursor.execute("SELECT * FROM points WHERE user_id = %s", (session['user_id'],))
+#     points = cursor.fetchone()
+    
+#     cursor.execute("SELECT * FROM coffees")
+#     coffees = cursor.fetchall()
+    
+#     # Fetch orders for the current user
+#     cursor.execute("SELECT * FROM orders WHERE user_id = %s", (session['user_id'],))
+#     orders = cursor.fetchall()
+    
+#     return render_template('customer_dashboard.html', points=points, coffees=coffees, orders=orders, order_success=None)
 @app.route('/customer_dashboard', methods=['GET', 'POST'])
 def customer_dashboard():
     if 'user_id' not in session:
@@ -130,8 +237,8 @@ def customer_dashboard():
             cursor.execute("UPDATE coffees SET quantity = quantity - %s WHERE id = %s", (quantity, coffee_id))
             db.commit()
             
-            # Update points with the total_price of the order
-            cursor.execute("UPDATE points SET points = points + %s WHERE user_id = %s", (total_price, session['user_id']))
+            # Update balance by deducting the total_price
+            cursor.execute("UPDATE balances SET balance = balance - %s WHERE user_id = %s", (total_price, session['user_id']))
             db.commit()
             
             order_success = True
@@ -147,8 +254,16 @@ def customer_dashboard():
         # Fetch orders for the current user
         cursor.execute("SELECT * FROM orders WHERE user_id = %s", (session['user_id'],))
         orders = cursor.fetchall()
+
+        # Fetch recharges for the current user
+        cursor.execute("SELECT * FROM recharges WHERE user_id = %s", (session['user_id'],))
+        recharges = cursor.fetchall()
         
-        return render_template('customer_dashboard.html', points=points, coffees=coffees, orders=orders, order_success=order_success)
+        # Fetch balance for the current user
+        cursor.execute("SELECT * FROM balances WHERE user_id = %s", (session['user_id'],))
+        balance = cursor.fetchone()['balance']
+        
+        return render_template('customer_dashboard.html', points=points, coffees=coffees, orders=orders, recharges=recharges, balance=balance, order_success=order_success)
     
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT * FROM points WHERE user_id = %s", (session['user_id'],))
@@ -160,10 +275,98 @@ def customer_dashboard():
     # Fetch orders for the current user
     cursor.execute("SELECT * FROM orders WHERE user_id = %s", (session['user_id'],))
     orders = cursor.fetchall()
+
+    # Fetch recharges for the current user
+    cursor.execute("SELECT * FROM recharges WHERE user_id = %s", (session['user_id'],))
+    recharges = cursor.fetchall()
     
-    return render_template('customer_dashboard.html', points=points, coffees=coffees, orders=orders, order_success=None)
+    # Fetch balance for the current user
+    cursor.execute("SELECT * FROM balances WHERE user_id = %s", (session['user_id'],))
+    balance = cursor.fetchone()['balance']
+    
+    return render_template('customer_dashboard.html', points=points, coffees=coffees, orders=orders, recharges=recharges, balance=balance, order_success=None)
 
+# @app.route('/customer_dashboard', methods=['GET', 'POST'])
+# def customer_dashboard():
+#     if 'user_id' not in session:
+#         return redirect(url_for('login'))
+    
+#     if request.method == 'POST':
+#         coffee_id = int(request.form['coffee_id'])
+#         quantity = int(request.form['quantity'])
+#         temperature = request.form['temperature']
+        
+#         cursor = db.cursor(dictionary=True)
+#         cursor.execute("SELECT * FROM coffees WHERE id = %s", (coffee_id,))
+#         coffee = cursor.fetchone()
+        
+#         if coffee and coffee['quantity'] >= quantity:
+#             total_price = coffee['price'] * quantity
+#             cursor.execute("INSERT INTO orders (user_id, coffee_id, quantity, total_price, order_date, temperature) VALUES (%s, %s, %s, %s, NOW(), %s)", (session['user_id'], coffee_id, quantity, total_price, temperature))
+#             db.commit()
+#             cursor.execute("UPDATE coffees SET quantity = quantity - %s WHERE id = %s", (quantity, coffee_id))
+#             db.commit()
+            
+#             # Update points with the total_price of the order
+#             cursor.execute("UPDATE points SET points = points + %s WHERE user_id = %s", (total_price, session['user_id']))
+#             db.commit()
+            
+#             order_success = True
+#         else:
+#             order_success = False
+        
+#         cursor.execute("SELECT * FROM points WHERE user_id = %s", (session['user_id'],))
+#         points = cursor.fetchone()
+        
+#         cursor.execute("SELECT * FROM coffees")
+#         coffees = cursor.fetchall()
 
+#         # Fetch orders for the current user
+#         cursor.execute("SELECT * FROM orders WHERE user_id = %s", (session['user_id'],))
+#         orders = cursor.fetchall()
+
+#         # Fetch recharges for the current user
+#         cursor.execute("SELECT * FROM recharges WHERE user_id = %s", (session['user_id'],))
+#         recharges = cursor.fetchall()
+        
+#         return render_template('customer_dashboard.html', points=points, coffees=coffees, orders=orders, recharges=recharges, order_success=order_success)
+    
+#     cursor = db.cursor(dictionary=True)
+#     cursor.execute("SELECT * FROM points WHERE user_id = %s", (session['user_id'],))
+#     points = cursor.fetchone()
+    
+#     cursor.execute("SELECT * FROM coffees")
+#     coffees = cursor.fetchall()
+    
+#     # Fetch orders for the current user
+#     cursor.execute("SELECT * FROM orders WHERE user_id = %s", (session['user_id'],))
+#     orders = cursor.fetchall()
+
+#     # Fetch recharges for the current user
+#     cursor.execute("SELECT * FROM recharges WHERE user_id = %s", (session['user_id'],))
+#     recharges = cursor.fetchall()
+    
+#     return render_template('customer_dashboard.html', points=points, coffees=coffees, orders=orders, recharges=recharges, order_success=None)
+
+# @app.route('/register', methods=['GET', 'POST'])
+# def register():
+#     if request.method == 'POST':
+#         username = request.form['username']
+#         password = request.form['password']
+        
+#         cursor = db.cursor(dictionary=True)
+#         cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+#         user = cursor.fetchone()
+        
+#         if user:
+#             error = 'Username already exists'
+#             return render_template('register.html', error=error)
+#         else:
+#             cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, 'customer')", (username, password))
+#             db.commit()
+#             return redirect(url_for('login'))
+    
+#     return render_template('register.html', error=None)
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -180,10 +383,94 @@ def register():
         else:
             cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, 'customer')", (username, password))
             db.commit()
+            cursor.execute("INSERT INTO balances (user_id, balance) VALUES (LAST_INSERT_ID(), 0)")
+            db.commit()
             return redirect(url_for('login'))
     
     return render_template('register.html', error=None)
 
+# @app.route('/place_order', methods=['POST'])
+# def place_order():
+#     if 'user_id' not in session or session['role'] != 'customer':
+#         return redirect(url_for('login'))
+    
+#     coffee_id = int(request.form['coffee_id'])
+#     quantity = int(request.form['quantity'])
+    
+#     cursor = db.cursor(dictionary=True)
+#     cursor.execute("SELECT * FROM coffees WHERE id = %s", (coffee_id,))
+#     coffee = cursor.fetchone()
+    
+#     cursor.execute("SELECT SUM(amount) as balance FROM recharges WHERE user_id = %s", (session['user_id'],))
+#     balance = cursor.fetchone()['balance']
+    
+#     if coffee and coffee['quantity'] >= quantity:
+#         total_price = coffee['price'] * quantity
+        
+#         if balance >= total_price:
+#             cursor.execute("INSERT INTO orders (user_id, coffee_id, quantity, total_price, order_date) VALUES (%s, %s, %s, %s, NOW())", (session['user_id'], coffee_id, quantity, total_price))
+#             db.commit()
+#             cursor.execute("UPDATE coffees SET quantity = quantity - %s WHERE id = %s", (quantity, coffee_id))
+#             db.commit()
+#             cursor.execute("INSERT INTO recharges (user_id, amount, recharge_date) VALUES (%s, %s, NOW())", (session['user_id'], -total_price))
+#             db.commit()
+#             message = "Order placed successfully!"
+#         else:
+#             message = "Insufficient balance!"
+#     else:
+#         message = "Not enough quantity available!"
+    
+#     cursor.execute("SELECT amount, recharge_date FROM recharges WHERE user_id = %s", (session['user_id'],))
+#     recharges = cursor.fetchall()
+#     cursor.execute("SELECT * FROM coffees")
+#     coffees = cursor.fetchall()
+#     cursor.execute("SELECT SUM(amount) as balance FROM recharges WHERE user_id = %s", (session['user_id'],))
+#     balance = cursor.fetchone()['balance']
+    
+#     return render_template('customer_dashboard.html', username=session['username'], recharges=recharges, coffees=coffees, balance=balance, message=message)
+
+@app.route('/place_order', methods=['POST'])
+def place_order():
+    if 'user_id' not in session or session['role'] != 'customer':
+        return redirect(url_for('login'))
+    
+    coffee_id = int(request.form['coffee_id'])
+    quantity = int(request.form['quantity'])
+    
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM coffees WHERE id = %s", (coffee_id,))
+    coffee = cursor.fetchone()
+    
+    cursor.execute("SELECT SUM(amount) as balance FROM recharges WHERE user_id = %s", (session['user_id'],))
+    balance = cursor.fetchone()['balance']
+    
+    if coffee and coffee['quantity'] >= quantity:
+        total_price = coffee['price'] * quantity
+        
+        if balance >= total_price:
+            # 扣除相应下单金额
+            cursor.execute("INSERT INTO orders (user_id, coffee_id, quantity, total_price, order_date) VALUES (%s, %s, %s, %s, NOW())", (session['user_id'], coffee_id, quantity, total_price))
+            db.commit()
+            cursor.execute("UPDATE coffees SET quantity = quantity - %s WHERE id = %s", (quantity, coffee_id))
+            db.commit()
+            cursor.execute("INSERT INTO recharges (user_id, amount, recharge_date) VALUES (%s, %s, NOW())", (session['user_id'], -total_price))
+            db.commit()
+            message = "Order placed successfully! Your account has been deducted: " + str(total_price) + " points."
+        else:
+            message = "Insufficient balance! Please recharge your account."
+    else:
+        message = "Not enough quantity available!"
+    
+    cursor.execute("SELECT amount, recharge_date FROM recharges WHERE user_id = %s", (session['user_id'],))
+    recharges = cursor.fetchall()
+    cursor.execute("SELECT * FROM coffees")
+    coffees = cursor.fetchall()
+    cursor.execute("SELECT SUM(amount) as balance FROM recharges WHERE user_id = %s", (session['user_id'],))
+    balance = cursor.fetchone()['balance']
+    
+    return render_template('customer_dashboard.html', username=session['username'], recharges=recharges, coffees=coffees, balance=balance, message=message)
+# 充值页面
+# 充值页面
 
 
 if __name__ == '__main__':

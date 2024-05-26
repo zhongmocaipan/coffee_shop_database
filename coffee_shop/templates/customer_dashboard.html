@@ -10,7 +10,6 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
             margin: 0;
         }
 
@@ -66,6 +65,7 @@
         <h1>Welcome, Customer!</h1>
         
         <h2>Points: {{ points.points }}</h2>
+        <h2>Balance: {{ balance }}</h2>
         
         <h2>Coffees</h2>
         <table>
@@ -126,9 +126,22 @@
         </table>
 
         {% if order_success %}
-        <p>Order submitted successfully! You can view your order details below:</p>
-        <!-- Display order details here -->
+        <p>Order submitted successfully! You can view your order details upwards!</p>
         {% endif %}
+
+        <h2>Your Balance</h2>
+        <table>
+            <tr>
+                <th>Amount</th>
+                <th>Recharge Date</th>
+            </tr>
+            {% for recharge in recharges %}
+            <tr>
+                <td>{{ recharge.amount }}</td>
+                <td>{{ recharge.recharge_date }}</td>
+            </tr>
+            {% endfor %}
+        </table>
     </div>
 </body>
 <script>
