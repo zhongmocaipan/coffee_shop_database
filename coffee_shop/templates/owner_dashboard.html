@@ -58,8 +58,64 @@
         h1, h2 {
             text-align: center;
         }
+        .error-message {
+            color: red;
+        }
     </style>
+     <!-- <script>
+        // JavaScript 代码
+        function checkDuplicateCoffee() {
+            // 获取咖啡名输入框的值
+            var name = document.getElementById('name').value;
+            // 使用 fetch 向后端发送请求
+            fetch('/check_duplicate_coffee', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name: name })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 处理返回的数据，根据是否重复来显示或隐藏提示信息
+                var errorMsg = document.getElementById('duplicateCoffeeMsg');
+                if (data.exists) {
+                    errorMsg.style.display = 'block';
+                    document.getElementById('addCoffeeBtn').disabled = true;
+                } else {
+                    errorMsg.style.display = 'none';
+                    document.getElementById('addCoffeeBtn').disabled = false;
+                }
+            });
+        }
+    </script> -->
+    <!-- 前端代码 -->
+<script>
+    function checkDuplicateCoffee() {
+        var name = document.getElementById('name').value;
+        fetch('/check_duplicate_coffee', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name: name })
+        })
+        .then(response => response.json())
+        .then(data => {
+            var errorMsg = document.getElementById('duplicateCoffeeMsg');
+            if (data.exists) {
+                errorMsg.style.display = 'block';
+                document.getElementById('addCoffeeBtn').disabled = true;
+            } else {
+                errorMsg.style.display = 'none';
+                document.getElementById('addCoffeeBtn').disabled = false;
+            }
+        });
+    }
+</script>
+
 </head>
+
 <body>
     <div class="dashboard">
         <h1>Welcome, BOSS!</h1>
@@ -143,8 +199,26 @@
         <button onclick="queryRecord()">查询</button>
         <div id="queryResult"></div> -->
         
+        <!-- owner_dashboard.html -->
+        <h2>Delete User</h2>
+        <table>
+            <tr>
+                <th>Username</th>
+                <th>Action</th>
+            </tr>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.username }}</td>
+                <td>
+                    <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post">
+                        <button type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
 
-        <h2>Orders</h2>
+        <!-- <h2>Orders</h2>
         <table>
             <tr>
                 <th>ID</th>
@@ -166,7 +240,33 @@
                 <td>{{ order.temperature }}</td>
             </tr>
             {% endfor %}
+        </table> -->
+        <h2>Orders and User Points</h2>
+        <table>
+            <tr>
+                <th>Order ID</th>
+                <th>User ID</th>
+                <th>Coffee ID</th>
+                <th>Quantity</th>
+                <th>Total Price</th>
+                <th>Order Date</th>
+                <th>Temperature</th>
+                <th>User Points</th>
+            </tr>
+            {% for order in orders %}
+            <tr>
+                <td>{{ order.id }}</td>
+                <td>{{ order.user_id }}</td>
+                <td>{{ order.coffee_id }}</td>
+                <td>{{ order.quantity }}</td>
+                <td>{{ order.total_price }}</td>
+                <td>{{ order.order_date }}</td>
+                <td>{{ order.temperature }}</td>
+                <td>{{ order.points }}</td>
+            </tr>
+            {% endfor %}
         </table>
+
         <h1>Recharge Balance</h1>
         <form method="post">
             <label for="user_id">User ID:</label>

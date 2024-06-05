@@ -41,6 +41,7 @@ def logout():
     session.pop('user_id', None)
     return redirect(url_for('login'))
 
+
 # @app.route('/owner_dashboard')
 # def owner_dashboard():
 #     if 'user_id' not in session:
@@ -51,8 +52,10 @@ def logout():
 #     coffees = cursor.fetchall()
 #     cursor.execute("SELECT * FROM orders")
 #     orders = cursor.fetchall()
+#     cursor.execute("SELECT * FROM points")
+#     user_points = cursor.fetchall()
     
-#     return render_template('owner_dashboard.html', coffees=coffees, orders=orders)
+#     return render_template('owner_dashboard.html', coffees=coffees, orders=orders, user_points=user_points)
 @app.route('/owner_dashboard')
 def owner_dashboard():
     if 'user_id' not in session:
@@ -65,24 +68,24 @@ def owner_dashboard():
     orders = cursor.fetchall()
     cursor.execute("SELECT * FROM points")
     user_points = cursor.fetchall()
+    cursor.execute("SELECT * FROM users")
+    users = cursor.fetchall()
     
-    return render_template('owner_dashboard.html', coffees=coffees, orders=orders, user_points=user_points)
-# @app.route('/add_coffee', methods=['POST'])
-# def add_coffee():
+    return render_template('owner_dashboard.html', coffees=coffees, orders=orders, user_points=user_points, users=users)
+
+# @app.route('/update_quantity/<int:coffee_id>', methods=['POST'])
+# def update_quantity(coffee_id):
 #     if 'user_id' not in session:
 #         return redirect(url_for('login'))
     
-#     name = request.form['name']
-#     price = float(request.form['price'])
-#     quantity = int(request.form['quantity'])
+#     quantity_change = int(request.form['quantity'])
     
 #     cursor = db.cursor(dictionary=True)
-#     cursor.execute("INSERT INTO coffees (name, price, quantity) VALUES (%s, %s, %s)", (name, price, quantity))
+#     cursor.execute("UPDATE coffees SET quantity = quantity + %s WHERE id = %s", (quantity_change, coffee_id))
 #     db.commit()
 #     cursor.close()
     
 #     return redirect(url_for('owner_dashboard'))
-
 @app.route('/update_quantity/<int:coffee_id>', methods=['POST'])
 def update_quantity(coffee_id):
     if 'user_id' not in session:
@@ -91,9 +94,14 @@ def update_quantity(coffee_id):
     quantity_change = int(request.form['quantity'])
     
     cursor = db.cursor(dictionary=True)
-    cursor.execute("UPDATE coffees SET quantity = quantity + %s WHERE id = %s", (quantity_change, coffee_id))
-    db.commit()
-    cursor.close()
+    try:
+        cursor.callproc('update_coffee_quantity', (coffee_id, quantity_change))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"An error occurred: {e}")
+    finally:
+        cursor.close()
     
     return redirect(url_for('owner_dashboard'))
 
@@ -111,6 +119,94 @@ def update_price(coffee_id):
     
     return redirect(url_for('owner_dashboard'))
 
+# @app.route('/delete_user/<int:user_id>', methods=['POST'])
+# # def delete_user(user_id):
+# #     if 'user_id' not in session:
+# #         return redirect(url_for('login'))
+    
+# #     cursor = db.cursor(dictionary=True)
+    
+# #     # Delete user
+# #     cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+    
+# #     # Delete balance information
+# #     cursor.execute("DELETE FROM balances WHERE user_id = %s", (user_id,))
+    
+# #     # Delete points information
+# #     cursor.execute("DELETE FROM points WHERE user_id = %s", (user_id,))
+    
+# #     db.commit()
+# #     cursor.close()
+    
+# #     return redirect(url_for('owner_dashboard'))
+# @app.route('/delete_user/<int:user_id>', methods=['POST'])
+# def delete_user(user_id):
+#     # if 'user_id' not in session or session['role'] != 'owner':
+#     #     return redirect(url_for('login'))
+
+#     cursor = db.cursor(dictionary=True)
+    
+#     # 先删除与用户相关的记录
+#     cursor.execute("DELETE FROM balances WHERE user_id = %s", (user_id,))
+#     cursor.execute("DELETE FROM orders WHERE user_id = %s", (user_id,))
+#     cursor.execute("DELETE FROM recharges WHERE user_id = %s", (user_id,))
+#     cursor.execute("DELETE FROM points WHERE user_id = %s", (user_id,))
+    
+#     # 然后删除用户记录
+#     cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+    
+#     db.commit()
+#     cursor.close()
+
+#     return redirect(url_for('owner_dashboard'))
+@app.route('/delete_user/<int:user_id>', methods=['POST'])
+def delete_user(user_id):
+    # if 'user_id' not in session or session['role'] != 'owner':
+    #     return redirect(url_for('login'))
+
+    cursor = db.cursor(dictionary=True)
+    
+    try:
+        # 开始事务
+        db.start_transaction()
+
+        # 先删除与用户相关的记录
+        cursor.execute("DELETE FROM balances WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM orders WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM recharges WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM points WHERE user_id = %s", (user_id,))
+        
+        # 然后删除用户记录
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        
+        # 提交事务
+        db.commit()
+    
+    except Exception as e:
+        # 发生错误时回滚事务
+        db.rollback()
+        print(f"An error occurred: {e}")
+    
+    finally:
+        # 关闭游标
+        cursor.close()
+
+    return redirect(url_for('owner_dashboard'))
+
+# @app.route('/search_records', methods=['POST'])
+# def search_records():
+#     search_id = request.form['search_id']
+#     cursor = db.cursor(dictionary=True)
+    
+#     # Search for user points
+#     cursor.execute("SELECT * FROM points WHERE user_id = %s", (search_id,))
+#     user_points = cursor.fetchall()
+    
+#     # Search for orders
+#     cursor.execute("SELECT * FROM orders WHERE user_id = %s", (search_id,))
+#     orders = cursor.fetchall()
+    
+#     return render_template('owner_dashboard.html', user_points=user_points, orders=orders)
 @app.route('/search_records', methods=['POST'])
 def search_records():
     search_id = request.form['search_id']
@@ -120,21 +216,33 @@ def search_records():
     cursor.execute("SELECT * FROM points WHERE user_id = %s", (search_id,))
     user_points = cursor.fetchall()
     
-    # Search for orders
-    cursor.execute("SELECT * FROM orders WHERE user_id = %s", (search_id,))
+    # Search for orders and join with points to get user points in each order
+    cursor.execute("""
+        SELECT orders.*, points.points 
+        FROM orders
+        LEFT JOIN points ON orders.user_id = points.user_id
+        WHERE orders.user_id = %s
+    """, (search_id,))
     orders = cursor.fetchall()
     
     return render_template('owner_dashboard.html', user_points=user_points, orders=orders)
-# @app.route('/query_record', methods=['POST'])
-# def query_record():
-#     record_id = request.json.get('id')
-#     # 根据 record_id 查询相应的记录
-#     record = query_record_from_database(record_id)
-#     if record:
-#         return jsonify({'success': True, 'data': record})
-#     else:
-#         return jsonify({'success': False})
 
+
+# @app.route('/add_coffee', methods=['POST'])
+# def add_coffee():
+#     if 'user_id' not in session:
+#         return redirect(url_for('login'))
+    
+#     name = request.form['name']
+#     price = float(request.form['price'])
+#     quantity = int(request.form['quantity'])
+    
+#     cursor = db.cursor(dictionary=True)
+#     cursor.execute("INSERT INTO coffees (name, price, quantity) VALUES (%s, %s, %s)", (name, price, quantity))
+#     db.commit()
+#     cursor.close()
+    
+#     return redirect(url_for('owner_dashboard'))
 @app.route('/add_coffee', methods=['POST'])
 def add_coffee():
     if 'user_id' not in session:
@@ -145,11 +253,19 @@ def add_coffee():
     quantity = int(request.form['quantity'])
     
     cursor = db.cursor(dictionary=True)
-    cursor.execute("INSERT INTO coffees (name, price, quantity) VALUES (%s, %s, %s)", (name, price, quantity))
-    db.commit()
-    cursor.close()
+    
+    try:
+        cursor.execute("INSERT INTO coffees (name, price, quantity) VALUES (%s, %s, %s)", (name, price, quantity))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"An error occurred: {e}")
+        return redirect(url_for('owner_dashboard', error="Coffee name already exists"))
+    finally:
+        cursor.close()
     
     return redirect(url_for('owner_dashboard'))
+
 
 @app.route('/delete_coffee/<int:coffee_id>', methods=['POST'])
 def delete_coffee(coffee_id):
@@ -162,6 +278,19 @@ def delete_coffee(coffee_id):
     cursor.close()
     
     return redirect(url_for('owner_dashboard'))
+
+# Flask 后端代码
+@app.route('/check_duplicate_coffee', methods=['POST'])
+def check_duplicate_coffee():
+    name = request.json.get('name')
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM coffees WHERE name = %s", (name,))
+    existing_coffee = cursor.fetchone()
+    cursor.close()
+    if existing_coffee:
+        return jsonify({'exists': True})
+    else:
+        return jsonify({'exists': False})
 
 # @app.route('/customer_dashboard', methods=['GET', 'POST'])
 # def customer_dashboard():
