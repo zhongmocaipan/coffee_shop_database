@@ -207,25 +207,37 @@ def delete_user(user_id):
 #     orders = cursor.fetchall()
     
 #     return render_template('owner_dashboard.html', user_points=user_points, orders=orders)
+
 @app.route('/search_records', methods=['POST'])
 def search_records():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
     search_id = request.form['search_id']
     cursor = db.cursor(dictionary=True)
     
-    # Search for user points
-    cursor.execute("SELECT * FROM points WHERE user_id = %s", (search_id,))
-    user_points = cursor.fetchall()
+    try:
+        # 从视图 UserPoints 查询用户的总订单价格和总积分
+        cursor.execute("SELECT * FROM UserPoints WHERE user_id = %s", (search_id,))
+        user_summary = cursor.fetchone()  # 假设每个用户只有一条记录
+        
+        if user_summary:
+            total_price = user_summary['total_price']
+            total_points = user_summary['total_points']
+        else:
+            total_price = 0
+            total_points = 0
+        
+        # 查询该用户的所有订单
+        cursor.execute("SELECT * FROM orders WHERE user_id = %s", (search_id,))
+        orders = cursor.fetchall()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return redirect(url_for('owner_dashboard', error="查询出错"))
+    finally:
+        cursor.close()
     
-    # Search for orders and join with points to get user points in each order
-    cursor.execute("""
-        SELECT orders.*, points.points 
-        FROM orders
-        LEFT JOIN points ON orders.user_id = points.user_id
-        WHERE orders.user_id = %s
-    """, (search_id,))
-    orders = cursor.fetchall()
-    
-    return render_template('owner_dashboard.html', user_points=user_points, orders=orders)
+    return render_template('owner_dashboard.html', total_price=total_price, total_points=total_points, orders=orders)
 
 
 # @app.route('/add_coffee', methods=['POST'])
@@ -243,6 +255,28 @@ def search_records():
 #     cursor.close()
     
 #     return redirect(url_for('owner_dashboard'))
+# @app.route('/add_coffee', methods=['POST'])
+# def add_coffee():
+#     if 'user_id' not in session:
+#         return redirect(url_for('login'))
+    
+#     name = request.form['name']
+#     price = float(request.form['price'])
+#     quantity = int(request.form['quantity'])
+    
+#     cursor = db.cursor(dictionary=True)
+    
+#     try:
+#         cursor.execute("INSERT INTO coffees (name, price, quantity) VALUES (%s, %s, %s)", (name, price, quantity))
+#         db.commit()
+#     except Exception as e:
+#         db.rollback()
+#         print(f"An error occurred: {e}")
+#         return redirect(url_for('owner_dashboard', error="Coffee name already exists"))
+#     finally:
+#         cursor.close()
+    
+#     return redirect(url_for('owner_dashboard'))
 @app.route('/add_coffee', methods=['POST'])
 def add_coffee():
     if 'user_id' not in session:
@@ -257,10 +291,14 @@ def add_coffee():
     try:
         cursor.execute("INSERT INTO coffees (name, price, quantity) VALUES (%s, %s, %s)", (name, price, quantity))
         db.commit()
-    except Exception as e:
+    except mysql.connector.Error as err:
         db.rollback()
-        print(f"An error occurred: {e}")
-        return redirect(url_for('owner_dashboard', error="Coffee name already exists"))
+        if err.errno == mysql.connector.errorcode.ER_SIGNAL_EXCEPTION:
+            error_message = err.msg
+        else:
+            error_message = "An error occurred"
+        print(f"An error occurred: {err}")
+        return redirect(url_for('owner_dashboard', error=error_message))
     finally:
         cursor.close()
     
